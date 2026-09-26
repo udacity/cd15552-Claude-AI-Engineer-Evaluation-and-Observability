@@ -165,24 +165,25 @@ def build_extraction_messages(
     user_content = f"<document>\n{document_text.strip()}\n</document>"
 
     if prior_attempts:
-        # TODO: Build the retry-feedback block.
-        #
-        # The model can only correct what it can actually see. Append a <prior_attempt>
-        # block for each entry in prior_attempts, embedding the *raw prior extraction
-        # value verbatim* (not a paraphrase of the error) plus the validation error's
-        # field, category, detected_pattern, and message. The pattern that works in
-        # practice is:
-        #
-        #   <prior_attempt index="1">
-        #     <extraction>{attempt['extraction']}</extraction>
-        #     <validation_error field="..." category="..." detected_pattern="...">
-        #       {attempt['error_message']}
-        #     </validation_error>
-        #   </prior_attempt>
-        #
-        # Then join the blocks with newlines and append to user_content with a short
-        # instruction line ("Your previous attempts were rejected by the validator. ...").
-        raise NotImplementedError("LO-A — implement the retry-feedback block.")
+                blocks = []
+
+        for index, attempt in enumerate(prior_attempts, start=1):
+            error = attempt["error"]
+
+            blocks.append(
+                f"""<prior_attempt index="{index}">
+  <extraction>{attempt["extraction"]}</extraction>
+  <validation_error field="{error.field}" category="{error.category}" detected_pattern="{error.detected_pattern}">
+    {error.message}
+  </validation_error>
+</prior_attempt>"""
+            )
+
+        user_content += (
+            "\n\nYour previous attempts were rejected by the validator. "
+            "Correct the identified issue and extract the policy again.\n"
+            + "\n".join(blocks)
+        )
 
     return [{"role": "user", "content": user_content}], SYSTEM_PROMPT
 
