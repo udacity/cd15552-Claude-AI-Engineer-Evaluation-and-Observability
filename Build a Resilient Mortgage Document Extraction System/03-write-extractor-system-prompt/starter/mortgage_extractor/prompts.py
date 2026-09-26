@@ -14,63 +14,138 @@ from __future__ import annotations
 
 from mortgage_extractor.models import DocumentType
 
-# TODO: Build the NORMALIZATION_RULES constant as a single string. It must
-# contain at minimum:
-#   - the literal substring "Square footage" with an example like
-#     "about 2,400 sq ft" → 2400
-#   - the literal substring "Currency" with an example like "$485,000" → 485000.0
-#   - the literal substring "Percentage" with an example like "6.5%" → 0.065
-# The test in tests/test_us03_prompts.py::test_ac_03_05_normalization_rules_is_single_referenced_constant
-# asserts those substrings, the "6.5%" / "0.065" pair, and the "2,400" / "2400" pair.
-NORMALIZATION_RULES = ""  # TODO: replace with the rule text
 
-# TODO: Build the _CATEGORICAL_CRITERIA constant as a numbered list of at
-# least four rules. The FIRST item must be, VERBATIM:
-#
-#     1. Return null for any field not explicitly stated in the document. Do not infer, default, or fabricate.
-#
-# (This exact substring must appear as item 1.) The remaining
-# items should distinguish base income from bonus, commission, and overtime;
-# tell the model to emit "other" + *_detail when an enum doesn't fit; and
-# remind the model that numeric fields receive numbers, not strings.
-_CATEGORICAL_CRITERIA = ""  # TODO: replace with the numbered criteria block
+NORMALIZATION_RULES = """
+Normalization rules:
+- Square footage: normalize informal square-footage expressions to numbers.
+  Example: "about 2,400 sq ft" → 2400.
+- Currency: remove currency symbols and thousands separators and return a
+  numeric value. Example: "$485,000" → 485000.0.
+- Percentage: convert percentages to decimal form. Example: "6.5%" → 0.065.
+- Dates should be represented using the format expected by the schema.
+- Numeric fields must contain numbers, not strings.
+""".strip()
 
-# TODO: Build the _FEW_SHOT_EXAMPLES constant as a single string containing
-# EXACTLY FOUR <example> blocks. Each block has this shape:
-#
-#     <example name="<short-name>">
-#     <input>
-#     ...document excerpt...
-#     </input>
-#     <reasoning>
-#     ...explanation of WHY the chosen output is correct vs. the plausible
-#     alternative...
-#     </reasoning>
-#     <output>
-#     ...JSON output...
-#     </output>
-#     </example>
-#
-# Four examples are required, whose names contain (in some order):
-#   - "clean"     — a fully-populated paystub where every component is stated
-#   - "missing"   — a paystub that does not mention bonus; bonus_monthly is null
-#   - "informal"  — an appraisal saying "about 2,400 sq ft"; sqft is 2400 (int)
-#   - "mismatch"  — a paystub whose stated total doesn't equal the line-item sum
-#
-# Each example must contain an inline <reasoning>...</reasoning>
-# block explaining the choice — for instance, for "missing":
-# "bonus_ytd is null because the document says no bonus this year — fabricating
-# a zero would imply zero earned, not zero reported."
-_FEW_SHOT_EXAMPLES = ""  # TODO: replace with the four <example> blocks
+
+_CATEGORICAL_CRITERIA = """
+1. Return null for any field not explicitly stated in the document. Do not infer, default, or fabricate.
+2. Distinguish base income from bonus, commission, and overtime. Record each component only when the document explicitly identifies it.
+3. When a categorical value does not fit an available enum, emit "other" and provide the corresponding *_detail value using the document's wording.
+4. Numeric fields receive numbers, not strings. Normalize numeric expressions according to the normalization rules below.
+""".strip()
+
+
+_FEW_SHOT_EXAMPLES = """
+<example name="clean">
+<input>
+Employee: Jane Smith
+Base salary YTD: $72,000
+Bonus YTD: $5,000
+Commission YTD: $3,000
+Overtime YTD: $1,200
+</input>
+<reasoning>
+Every income component is explicitly stated, so each corresponding field can
+be populated. Currency values are normalized to numeric values rather than
+returned as strings.
+</reasoning>
+<output>
+{
+  "borrower": {
+    "full_name": "Jane Smith",
+    "coborrower_name": null
+  },
+  "income": {
+    "base_ytd": 72000.0,
+    "bonus_ytd": 5000.0,
+    "total_ytd": 81200.0
+  }
+}
+</output>
+</example>
+
+<example name="missing">
+<input>
+Employee: Robert Jones
+Base salary YTD: $64,000
+The employee has no bonus eligibility this year.
+</input>
+<reasoning>
+bonus_ytd is null because the document does not report a bonus amount.
+Fabricating zero would imply zero was earned or reported, rather than
+preserving the distinction that the amount is absent from the document.
+</reasoning>
+<output>
+{
+  "borrower": {
+    "full_name": "Robert Jones",
+    "coborrower_name": null
+  },
+  "income": {
+    "base_ytd": 64000.0,
+    "bonus_ytd": null,
+    "total_ytd": null
+  }
+}
+</output>
+</example>
+
+<example name="informal">
+<input>
+Property appraisal:
+The subject property contains about 2,400 sq ft of living area.
+</input>
+<reasoning>
+The document explicitly states the approximate square footage. The word
+"about" does not make the numeric value a string; the number should be
+normalized to the integer 2400.
+</reasoning>
+<output>
+{
+  "property": {
+    "address": null,
+    "year_built": null,
+    "property_type": null,
+    "occupancy_type": null,
+    "hoa_dues_monthly": null,
+    "square_footage": 2400
+  }
+}
+</output>
+</example>
+
+<example name="mismatch">
+<input>
+Employee: Maria Brown
+Base salary YTD: $50,000
+Bonus YTD: $4,000
+Overtime YTD: $2,000
+Total YTD: $60,000
+</input>
+<reasoning>
+The stated total is preserved as stated rather than silently corrected. The
+line items sum to $56,000, which differs from the document's stated $60,000.
+The extractor must not replace the source value with its own arithmetic.
+</reasoning>
+<output>
+{
+  "borrower": {
+    "full_name": "Maria Brown",
+    "coborrower_name": null
+  },
+  "income": {
+    "base_ytd": 50000.0,
+    "bonus_ytd": 4000.0,
+    "total_ytd": 60000.0
+  }
+}
+</output>
+</example>
+""".strip()
 
 
 def classifier_system_prompt() -> str:
-    """System prompt for the classifier pass.
-
-    Provided as-is — the classifier prompt isn't load-bearing for Exercise 3's
-    LO. (You wrote and tested this in Exercise 2 against the placeholder
-    extractor prompts; the rules above don't apply to classify.)
-    """
+    """System prompt for the classifier pass."""
     return (
         "You are a document classifier for a mortgage lender. You will receive "
         "the text of a single mortgage-related document and must call the "
@@ -82,40 +157,43 @@ def classifier_system_prompt() -> str:
 
 
 def extractor_system_prompt(doc_type: DocumentType) -> str:
-    """Return the system prompt for the given document type's extractor.
+    """Return the system prompt for the given document type's extractor."""
+    if doc_type == DocumentType.INCOME_VERIFICATION:
+        return income_verification_system_prompt()
 
-    All extractor prompts share the same normalization rules and few-shot
-    examples; the income-verification prompt additionally surfaces the full
-    explicit categorical criteria block.
-    """
-    # TODO: Assemble the extractor system prompt for non-income document types
-    # (LOAN_APPLICATION, APPRAISAL):
-    #   1. If doc_type is INCOME_VERIFICATION, delegate to
-    #      income_verification_system_prompt() and return.
-    #   2. Otherwise, return:
-    #        intro + NORMALIZATION_RULES + "\n" + _FEW_SHOT_EXAMPLES
-    #      where `intro` is a 2-3 sentence instruction that names the
-    #      doc_type, tells the model to call extract_<doc_type> exactly once
-    #      with the structured data, and offer `flag_for_review` if the
-    #      document is unreadable.
-    raise NotImplementedError("Exercise 3: implement extractor_system_prompt()")
+    intro = (
+        f"You are a mortgage document extractor handling a "
+        f"{doc_type.value} document. Extract only information explicitly "
+        f"stated in the document and call `extract_{doc_type.value}` exactly "
+        f"once with the structured data. If the document is unreadable or "
+        "cannot be reliably extracted, call `flag_for_review` instead."
+    )
+
+    return (
+        intro
+        + "\n\n"
+        + NORMALIZATION_RULES
+        + "\n\n"
+        + _FEW_SHOT_EXAMPLES
+    )
 
 
 def income_verification_system_prompt() -> str:
-    """Return the income-verification extractor system prompt.
+    """Return the income-verification extractor system prompt."""
+    intro = (
+        "You are a mortgage income-verification document extractor. Extract "
+        "only information explicitly stated in the document and call "
+        "`extract_income_verification` exactly once with the structured data. "
+        "If the document is unreadable or cannot be reliably extracted, call "
+        "`flag_for_review` instead."
+    )
 
-    This is the canonical extractor prompt: it contains the verbatim null-
-    handling criterion as item #1, four numbered categorical criteria, the
-    shared :data:`NORMALIZATION_RULES`, and four contrastive few-shot examples
-    each with an inline ``<reasoning>`` block.
-    """
-    # TODO: Assemble the income-verification prompt by concatenating:
-    #   1. A short intro (2-3 sentences) naming the document type and telling
-    #      the model to call extract_income_verification exactly once or
-    #      flag_for_review if the document is unreadable.
-    #   2. _CATEGORICAL_CRITERIA (the four numbered rules).
-    #   3. A blank line.
-    #   4. NORMALIZATION_RULES.
-    #   5. A blank line.
-    #   6. _FEW_SHOT_EXAMPLES (the four <example> blocks).
-    raise NotImplementedError("Exercise 3: implement income_verification_system_prompt()")
+    return (
+        intro
+        + "\n\n"
+        + _CATEGORICAL_CRITERIA
+        + "\n\n"
+        + NORMALIZATION_RULES
+        + "\n\n"
+        + _FEW_SHOT_EXAMPLES
+    )
