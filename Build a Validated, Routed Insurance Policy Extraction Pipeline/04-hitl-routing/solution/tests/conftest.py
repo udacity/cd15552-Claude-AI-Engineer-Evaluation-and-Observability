@@ -90,7 +90,7 @@ def make_tool_use_message(
 def make_text_message(
     text: str,
     *,
-    model: str = "claude-sonnet-4-6",
+    model: str = "claude-sonnet-4-5-20250929",
     input_tokens: int = 100,
     output_tokens: int = 50,
 ) -> Message:
