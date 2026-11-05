@@ -7,9 +7,8 @@ doc-type-specific tools (a primary extractor plus a ``flag_for_review`` escape
 hatch). ``"any"`` rather than ``"auto"`` because ``"auto"`` would permit a
 conversational text fallback; ``"any"`` guarantees a ``tool_use`` block.
 
-This pattern mirrors the Architect's Playbook "broad-then-pinpoint" exploration
-recipe: classify the document first, then drill into the doc-type-specific
-extractor with a fallback for unrecoverable cases.
+This is a broad-then-pinpoint pattern: classify the document first, then drill
+into the doc-type-specific extractor with a fallback for unrecoverable cases.
 """
 from __future__ import annotations
 
