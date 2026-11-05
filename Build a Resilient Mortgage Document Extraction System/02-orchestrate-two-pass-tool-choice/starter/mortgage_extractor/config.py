@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-DEFAULT_MODEL = "claude-haiku-4-5"
+DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 SONNET_MODEL = "claude-sonnet-4-6"
 
 DEFAULT_MAX_TOKENS = 1500

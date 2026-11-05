@@ -4,7 +4,7 @@ Reviewer is a separate API call with a fresh prompt; no extractor history.
 Reviewer returns per-field {agreement, reason?, review_confidence}.
 Any disagreement flags review_disagreement (routed to human resolution).
 Reviewer prompt contains only source + extracted JSON; no extractor tokens.
-Reviewer uses claude-sonnet-4-6; extractor uses claude-haiku-4-5-20251001.
+Reviewer uses claude-sonnet-4-5-20250929; extractor uses claude-haiku-4-5-20251001.
 Integration pass runs cross-field checks: coverage_limit vs endorsements,
            endorsements vs exclusions non-contradiction, premium vs components.
 """
@@ -152,7 +152,7 @@ def test_ac_03_03_any_disagreement_flags_review_disagreement() -> None:
 def test_ac_03_05_extractor_and_reviewer_use_different_models() -> None:
     """The default reviewer model is stronger than the default extractor model."""
     assert DEFAULT_EXTRACTOR_MODEL == "claude-haiku-4-5-20251001"
-    assert DEFAULT_REVIEWER_MODEL == "claude-sonnet-4-6"
+    assert DEFAULT_REVIEWER_MODEL == "claude-sonnet-4-5-20250929"
 
 
 def test_ac_03_05_independent_review_uses_reviewer_model_by_default() -> None:
